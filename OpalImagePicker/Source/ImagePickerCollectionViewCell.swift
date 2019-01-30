@@ -75,12 +75,7 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
             return super.isSelected
         }
     }
-    
-    func setSelected(_ isSelected: Bool, animated: Bool) {
-        super.isSelected = isSelected
-        updateSelected(animated)
-    }
-    
+
     lazy var imageView: UIImageView = {
         let imageView = UIImageView(frame: frame)
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -99,11 +94,9 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
     lazy var timeOverlay: UIImageView = {
         let timeOverlay = UIImageView()
         timeOverlay.translatesAutoresizingMaskIntoConstraints = false
-        let timeOverlayImage = UIImage(named: "gradient",
-                                       in: Bundle.podBundle(forClass: type(of: self).self),
-                                       compatibleWith: nil)
-        timeOverlay.image = timeOverlayImage?.resizableImage(withCapInsets: .zero,
-                                                             resizingMode: .stretch)
+        let bundle = Bundle.podBundle(forClass: type(of: self).self)
+        let timeOverlayImage = UIImage(named: "gradient", in: bundle, compatibleWith: nil)
+        timeOverlay.image = timeOverlayImage?.resizableImage(withCapInsets: .zero, resizingMode: .stretch)
         timeOverlay.isHidden = true
         return timeOverlay
     }()
@@ -146,7 +139,7 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
             timeOverlay.constraintEqualTo(with: contentView, attribute: .right),
             timeOverlay.constraintEqualTo(with: contentView, attribute: .bottom),
             heightConstraint
-            ])
+        ])
         
         let constraintsToFill = contentView.constraintsToFill(otherView: imageView)
         let constraintsToCenter = contentView.constraintsToCenter(otherView: activityIndicator)
@@ -171,11 +164,16 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
         guard let imageRequestID = self.imageRequestID else { return }
         manager.cancelImageRequest(imageRequestID)
         self.imageRequestID = nil
-        
+
         //Remove selection
         setSelected(false, animated: false)
     }
-    
+
+    func setSelected(_ isSelected: Bool, animated: Bool) {
+        super.isSelected = isSelected
+        updateSelected(animated)
+    }
+
     private func loadPhotoAssetIfNeeded() {
         guard let indexPath = self.indexPath,
             let asset = photoAsset, let size = self.size else { return }
@@ -221,20 +219,17 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
             guard indexPath == self?.indexPath else { return }
             DispatchQueue.main.async { [weak self] in
                 self?.activityIndicator.stopAnimating()
-                
-                guard let httpURLResponse = response as? HTTPURLResponse, httpURLResponse.statusCode == 200,
-                    let mimeType = response?.mimeType, mimeType.hasPrefix("image"),
+                guard let httpURLResponse = response as? HTTPURLResponse,
+                    httpURLResponse.statusCode == 200,
+                    let mimeType = response?.mimeType,
+                    mimeType.hasPrefix("image"),
                     let data = data, error == nil,
                     let image = UIImage(data: data) else {
                         //broken link image
                         self?.imageView.image = UIImage()
                         return
                 }
-                
-                self?.cache?.setObject(data as NSData,
-                                       forKey: indexPath as NSIndexPath,
-                                       cost: data.count)
-                
+                self?.cache?.setObject(data as NSData, forKey: indexPath as NSIndexPath, cost: data.count)
                 self?.imageView.image = image
             }
         }
@@ -260,13 +255,12 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
         
         let overlayImageView = UIImageView(frame: frame)
         overlayImageView.translatesAutoresizingMaskIntoConstraints = false
-        overlayImageView.contentMode = .center
+        overlayImageView.contentMode = .scaleAspectFit
         overlayImageView.image = selectionImage ?? UIImage(named: "checkmark", in: Bundle.podBundle(forClass: type(of: self).self), compatibleWith: nil)?.withRenderingMode(.alwaysTemplate)
         overlayImageView.tintColor = selectionImageTintColor
         overlayImageView.alpha = 0
         contentView.addSubview(overlayImageView)
         self.overlayImageView = overlayImageView
-        
         let overlayViewConstraints = overlayView.constraintsToFill(otherView: contentView)
         let overlayImageViewConstraints = overlayImageView.constraintsToFill(otherView: contentView)
         NSLayoutConstraint.activate(overlayImageViewConstraints + overlayViewConstraints)
