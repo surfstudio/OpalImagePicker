@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Photos
 
 /// Configuration. Optionally change localized strings.
 public class OpalImagePickerConfiguration: NSObject {
