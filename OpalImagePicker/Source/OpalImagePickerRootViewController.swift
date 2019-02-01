@@ -123,7 +123,11 @@ open class OpalImagePickerRootViewController: UIViewController {
     private var showExternalImages = false
     private var selectedIndexPaths: [IndexPath] = []
     private var externalSelectedIndexPaths: [IndexPath] = []
-    
+
+    private var opalImagePickerController: OpalImagePickerController? {
+        return navigationController as? OpalImagePickerController
+    }
+
     private lazy var cache: NSCache<NSIndexPath, NSData> = {
         let cache = NSCache<NSIndexPath, NSData>()
         cache.totalCostLimit = 128000000 //128 MB
@@ -199,11 +203,14 @@ open class OpalImagePickerRootViewController: UIViewController {
         
         guard shouldExpandImagesFromAssets() else { return }
         let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
-        options.isSynchronous = true
-        options.isNetworkAccessAllowed = true
-        
+
+        let defaultOptions = PHImageRequestOptions()
+        defaultOptions.deliveryMode = .highQualityFormat
+        defaultOptions.isSynchronous = true
+        defaultOptions.isNetworkAccessAllowed = true
+
+        let options = configuration?.imageRequestOptions ?? defaultOptions
+
         for asset in photoAssets {
             manager.requestImageData(for: asset, options: options, resultHandler: { [weak self] (data, _, _, _) in
                 guard let strongSelf = self,
@@ -334,7 +341,6 @@ open class OpalImagePickerRootViewController: UIViewController {
     
     private func set(image: UIImage?, indexPath: IndexPath, isExternal: Bool) {
         update(isSelected: image != nil, isExternal: isExternal, for: indexPath)
-        
         // Only store images if delegate method is implemented
         if let nsDelegate = delegate as? NSObject,
             !nsDelegate.responds(to: #selector(OpalImagePickerControllerDelegate.imagePicker(_:didFinishPickingImages:))) {
@@ -441,8 +447,11 @@ extension OpalImagePickerRootViewController: UICollectionViewDelegate {
     }
     
     public func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? ImagePickerCollectionViewCell,
-            cell.imageView.image != nil else { return false }
+        guard
+            let cell = collectionView.cellForItem(at: indexPath) as? ImagePickerCollectionViewCell,
+            let image = cell.imageView.image
+        else { return false }
+
         guard maximumSelectionsAllowed > 0 else { return true }
         
         let collectionViewItems = self.collectionView?.indexPathsForSelectedItems?.count ?? 0
@@ -458,6 +467,11 @@ extension OpalImagePickerRootViewController: UICollectionViewDelegate {
             present(alert, animated: true, completion: nil)
             return false
         }
+
+        if let viewController = self.opalImagePickerController {
+            return delegate?.imagePicker?(viewController, shouldSelectImage: image) ?? true
+        }
+
         return true
     }
 }

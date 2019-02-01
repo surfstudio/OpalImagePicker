@@ -43,7 +43,9 @@ public class OpalImagePickerConfiguration: NSObject {
     
     /// Localized maximum selections allowed error message displayed to the user.
     public var maximumSelectionsAllowedMessage: String?
-    
+
+    public var imageRequestOptions: PHImageRequestOptions?
+
     /// Localized "OK" string.
     public var okayString: String?
 }

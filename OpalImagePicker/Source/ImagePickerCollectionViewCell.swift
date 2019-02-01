@@ -175,8 +175,11 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
     }
 
     private func loadPhotoAssetIfNeeded() {
-        guard let indexPath = self.indexPath,
-            let asset = photoAsset, let size = self.size else { return }
+        guard
+            let indexPath = self.indexPath,
+            let asset = photoAsset,
+            let size = self.size
+        else { return }
         
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
