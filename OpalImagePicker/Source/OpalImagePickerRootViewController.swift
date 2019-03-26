@@ -86,10 +86,11 @@ open class OpalImagePickerRootViewController: UIViewController {
     
     /// Page size for paging through the Photo Assets in the Photo Library. Defaults to 100. Must override to change this value. Only works in iOS 9.0+
     public let pageSize = 100
-    
+
+    public weak var doneButton: UIBarButtonItem?
+    public weak var cancelButton: UIBarButtonItem?
+
     var photoAssets: PHFetchResult<PHAsset> = PHFetchResult()
-    weak var doneButton: UIBarButtonItem?
-    weak var cancelButton: UIBarButtonItem?
     
     internal var collectionViewLayout: OpalImagePickerCollectionViewLayout? {
         return collectionView?.collectionViewLayout as? OpalImagePickerCollectionViewLayout
@@ -122,7 +123,11 @@ open class OpalImagePickerRootViewController: UIViewController {
     private var showExternalImages = false
     private var selectedIndexPaths: [IndexPath] = []
     private var externalSelectedIndexPaths: [IndexPath] = []
-    
+
+    private var opalImagePickerController: OpalImagePickerController? {
+        return navigationController as? OpalImagePickerController
+    }
+
     private lazy var cache: NSCache<NSIndexPath, NSData> = {
         let cache = NSCache<NSIndexPath, NSData>()
         cache.totalCostLimit = 128000000 //128 MB
@@ -141,108 +146,7 @@ open class OpalImagePickerRootViewController: UIViewController {
     public required init?(coder aDecoder: NSCoder) {
         fatalError("Cannot init \(String(describing: OpalImagePickerRootViewController.self)) from Interface Builder")
     }
-    
-    private func setup() {
-        fetchPhotos()
-        
-        let collectionView = UICollectionView(frame: view.frame, collectionViewLayout: OpalImagePickerCollectionViewLayout())
-        setup(collectionView: collectionView)
-        view.addSubview(collectionView)
-        self.collectionView = collectionView
-        
-        var constraints: [NSLayoutConstraint] = []
-        if shouldShowTabs {
-            setupTabs()
-            let externalCollectionView = UICollectionView(frame: view.frame, collectionViewLayout: OpalImagePickerCollectionViewLayout())
-            setup(collectionView: externalCollectionView)
-            view.addSubview(externalCollectionView)
-            self.externalCollectionView = externalCollectionView
-            
-            constraints += [externalCollectionView.constraintEqualTo(with: collectionView, attribute: .top)]
-            constraints += [externalCollectionView.constraintEqualTo(with: collectionView, attribute: .bottom)]
-            constraints += [externalCollectionView.constraintEqualTo(with: collectionView, receiverAttribute: .left, otherAttribute: .right)]
-            constraints += [collectionView.constraintEqualTo(with: view, attribute: .width)]
-            constraints += [externalCollectionView.constraintEqualTo(with: view, attribute: .width)]
-            constraints += [toolbar.constraintEqualTo(with: collectionView, receiverAttribute: .bottom, otherAttribute: .top)]
-        } else {
-            constraints += [view.constraintEqualTo(with: collectionView, attribute: .top)]
-            constraints += [view.constraintEqualTo(with: collectionView, attribute: .right)]
-        }
-        
-        //Lower priority to override left constraint for animations
-        let leftCollectionViewConstraint = view.constraintEqualTo(with: collectionView, attribute: .left)
-        leftCollectionViewConstraint.priority = UILayoutPriority(rawValue: 999)
-        constraints += [leftCollectionViewConstraint]
-        
-        constraints += [view.constraintEqualTo(with: collectionView, attribute: .bottom)]
-        NSLayoutConstraint.activate(constraints)
-        view.layoutIfNeeded()
-    }
-    
-    private func setup(collectionView: UICollectionView) {
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
-        collectionView.allowsMultipleSelection = true
-        collectionView.backgroundColor = .white
-        collectionView.dataSource = self
-        collectionView.delegate = self
-        collectionView.register(ImagePickerCollectionViewCell.self, forCellWithReuseIdentifier: ImagePickerCollectionViewCell.reuseId)
-    }
-    
-    private func setupTabs() {
-        edgesForExtendedLayout = UIRectEdge()
-        navigationController?.navigationBar.isTranslucent = false
-        toolbar.isTranslucent = false
-        
-        view.addSubview(toolbar)
-        let flexItem1 = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        let flexItem2 = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        let barButtonItem = UIBarButtonItem(customView: tabSegmentedControl)
-        toolbar.setItems([flexItem1, barButtonItem, flexItem2], animated: false)
-        
-        if let imagePicker = navigationController as? OpalImagePickerController,
-            let title = delegate?.imagePickerTitleForExternalItems?(imagePicker) {
-            tabSegmentedControl.setTitle(title, forSegmentAt: 1)
-        }
 
-        NSLayoutConstraint.activate([
-            toolbar.constraintEqualTo(with: topLayoutGuide, receiverAttribute: .top, otherAttribute: .bottom),
-            toolbar.constraintEqualTo(with: view, attribute: .left),
-            toolbar.constraintEqualTo(with: view, attribute: .right)
-            ])
-    }
-    
-    private func fetchPhotos() {
-        requestPhotoAccessIfNeeded(PHPhotoLibrary.authorizationStatus())
-        
-        if #available(iOS 9.0, *) {
-            fetchOptions.fetchLimit = pageSize
-        }
-        photoAssets = PHAsset.fetchAssets(with: fetchOptions)
-        collectionView?.reloadData()
-    }
-    
-    private func updateFetchOptionPredicate() {
-        var predicates: [NSPredicate] = []
-        if let allowedMediaTypes = self.allowedMediaTypes {
-            let mediaTypesPredicates = allowedMediaTypes.map { NSPredicate(format: "mediaType = %d", $0.rawValue) }
-            let allowedMediaTypesPredicate = NSCompoundPredicate(orPredicateWithSubpredicates: mediaTypesPredicates)
-            predicates += [allowedMediaTypesPredicate]
-        }
-        
-        if let allowedMediaSubtypes = self.allowedMediaSubtypes {
-            let mediaSubtypes = NSPredicate(format: "mediaSubtypes = %d", allowedMediaSubtypes.rawValue)
-            predicates += [mediaSubtypes]
-        }
-        
-        if predicates.count > 0 {
-            let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
-            fetchOptions.predicate = predicate
-        } else {
-            fetchOptions.predicate = nil
-        }
-        fetchPhotos()
-    }
-    
     /// Load View
     open override func loadView() {
         view = UIView()
@@ -261,18 +165,19 @@ open class OpalImagePickerRootViewController: UIViewController {
         
         let doneButtonTitle = configuration?.doneButtonTitle ?? NSLocalizedString("Done", comment: "")
         let doneButton = UIBarButtonItem(title: doneButtonTitle, style: .done, target: self, action: #selector(doneTapped))
+
         navigationItem.rightBarButtonItem = doneButton
         self.doneButton = doneButton
     }
     
-    @objc func cancelTapped() {
+    @objc open func cancelTapped() {
         dismiss(animated: true) { [weak self] in
             guard let imagePicker = self?.navigationController as? OpalImagePickerController else { return }
             self?.delegate?.imagePickerDidCancel?(imagePicker)
         }
     }
     
-    @objc func doneTapped() {
+    @objc open func doneTapped() {
         guard let imagePicker = navigationController as? OpalImagePickerController else { return }
         
         let indexPathsForSelectedItems = selectedIndexPaths
@@ -298,11 +203,14 @@ open class OpalImagePickerRootViewController: UIViewController {
         
         guard shouldExpandImagesFromAssets() else { return }
         let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
-        options.isSynchronous = true
-        options.isNetworkAccessAllowed = true
-        
+
+        let defaultOptions = PHImageRequestOptions()
+        defaultOptions.deliveryMode = .highQualityFormat
+        defaultOptions.isSynchronous = true
+        defaultOptions.isNetworkAccessAllowed = true
+
+        let options = configuration?.imageRequestOptions ?? defaultOptions
+
         for asset in photoAssets {
             manager.requestImageData(for: asset, options: options, resultHandler: { [weak self] (data, _, _, _) in
                 guard let strongSelf = self,
@@ -314,13 +222,118 @@ open class OpalImagePickerRootViewController: UIViewController {
         delegate?.imagePicker?(imagePicker, didFinishPickingImages: savedImages)
         savedImages = []
     }
+
+    private func setup() {
+        fetchPhotos()
+
+        let collectionView = UICollectionView(frame: view.frame, collectionViewLayout: OpalImagePickerCollectionViewLayout())
+        setup(collectionView: collectionView)
+        view.addSubview(collectionView)
+        self.collectionView = collectionView
+
+        var constraints: [NSLayoutConstraint] = []
+        if shouldShowTabs {
+            setupTabs()
+            let externalCollectionView = UICollectionView(frame: view.frame, collectionViewLayout: OpalImagePickerCollectionViewLayout())
+            setup(collectionView: externalCollectionView)
+            view.addSubview(externalCollectionView)
+            self.externalCollectionView = externalCollectionView
+
+            constraints += [externalCollectionView.constraintEqualTo(with: collectionView, attribute: .top)]
+            constraints += [externalCollectionView.constraintEqualTo(with: collectionView, attribute: .bottom)]
+            constraints += [externalCollectionView.constraintEqualTo(with: collectionView, receiverAttribute: .left, otherAttribute: .right)]
+            constraints += [collectionView.constraintEqualTo(with: view, attribute: .width)]
+            constraints += [externalCollectionView.constraintEqualTo(with: view, attribute: .width)]
+            constraints += [toolbar.constraintEqualTo(with: collectionView, receiverAttribute: .bottom, otherAttribute: .top)]
+        } else {
+            constraints += [view.constraintEqualTo(with: collectionView, attribute: .top)]
+            constraints += [view.constraintEqualTo(with: collectionView, attribute: .right)]
+        }
+
+        //Lower priority to override left constraint for animations
+        let leftCollectionViewConstraint = view.constraintEqualTo(with: collectionView, attribute: .left)
+        leftCollectionViewConstraint.priority = UILayoutPriority(rawValue: 999)
+        constraints += [leftCollectionViewConstraint]
+
+        constraints += [view.constraintEqualTo(with: collectionView, attribute: .bottom)]
+        NSLayoutConstraint.activate(constraints)
+        view.layoutIfNeeded()
+    }
+
+    private func setup(collectionView: UICollectionView) {
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        collectionView.allowsMultipleSelection = true
+        collectionView.backgroundColor = .white
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.register(ImagePickerCollectionViewCell.self, forCellWithReuseIdentifier: ImagePickerCollectionViewCell.reuseId)
+    }
+
+    private func setupTabs() {
+        edgesForExtendedLayout = UIRectEdge()
+        navigationController?.navigationBar.isTranslucent = false
+        toolbar.isTranslucent = false
+
+        view.addSubview(toolbar)
+        let flexItem1 = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let flexItem2 = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let barButtonItem = UIBarButtonItem(customView: tabSegmentedControl)
+        toolbar.setItems([flexItem1, barButtonItem, flexItem2], animated: false)
+
+        if let imagePicker = navigationController as? OpalImagePickerController,
+            let title = delegate?.imagePickerTitleForExternalItems?(imagePicker) {
+            tabSegmentedControl.setTitle(title, forSegmentAt: 1)
+        }
+
+        NSLayoutConstraint.activate([
+            toolbar.constraintEqualTo(with: topLayoutGuide, receiverAttribute: .top, otherAttribute: .bottom),
+            toolbar.constraintEqualTo(with: view, attribute: .left),
+            toolbar.constraintEqualTo(with: view, attribute: .right)
+        ])
+    }
+
+    private func fetchPhotos() {
+        requestPhotoAccessIfNeeded(PHPhotoLibrary.authorizationStatus())
+
+        if #available(iOS 9.0, *) {
+            fetchOptions.fetchLimit = pageSize
+        }
+        photoAssets = PHAsset.fetchAssets(with: fetchOptions)
+        collectionView?.reloadData()
+    }
+
+    private func updateFetchOptionPredicate() {
+        var predicates: [NSPredicate] = []
+        if let allowedMediaTypes = self.allowedMediaTypes {
+            let mediaTypesPredicates = allowedMediaTypes.map {
+                NSPredicate(format: "mediaType = %d", $0.rawValue)
+            }
+            let allowedMediaTypesPredicate = NSCompoundPredicate(orPredicateWithSubpredicates: mediaTypesPredicates)
+            predicates += [allowedMediaTypesPredicate]
+        }
+
+        if let allowedMediaSubtypes = self.allowedMediaSubtypes {
+            let mediaSubtypes = NSPredicate(format: "mediaSubtypes = %d", allowedMediaSubtypes.rawValue)
+            predicates += [mediaSubtypes]
+        }
+
+        if predicates.count > 0 {
+            let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            fetchOptions.predicate = predicate
+        } else {
+            fetchOptions.predicate = nil
+        }
+        fetchPhotos()
+    }
+
     
     private func shouldExpandImagesFromAssets() -> Bool {
         //Only expand images if didFinishPickingAssets is implemented in delegate.
         if let delegate = self.delegate as? NSObject,
             delegate.responds(to: #selector(OpalImagePickerControllerDelegate.imagePicker(_:didFinishPickingImages:))) {
             return true
-        } else if !(delegate is NSObject) {
+        }
+        if !(delegate is NSObject) {
             return true
         }
         return false
@@ -328,7 +341,6 @@ open class OpalImagePickerRootViewController: UIViewController {
     
     private func set(image: UIImage?, indexPath: IndexPath, isExternal: Bool) {
         update(isSelected: image != nil, isExternal: isExternal, for: indexPath)
-        
         // Only store images if delegate method is implemented
         if let nsDelegate = delegate as? NSObject,
             !nsDelegate.responds(to: #selector(OpalImagePickerControllerDelegate.imagePicker(_:didFinishPickingImages:))) {
@@ -435,8 +447,11 @@ extension OpalImagePickerRootViewController: UICollectionViewDelegate {
     }
     
     public func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? ImagePickerCollectionViewCell,
-            cell.imageView.image != nil else { return false }
+        guard
+            let cell = collectionView.cellForItem(at: indexPath) as? ImagePickerCollectionViewCell,
+            let image = cell.imageView.image
+        else { return false }
+
         guard maximumSelectionsAllowed > 0 else { return true }
         
         let collectionViewItems = self.collectionView?.indexPathsForSelectedItems?.count ?? 0
@@ -452,6 +467,11 @@ extension OpalImagePickerRootViewController: UICollectionViewDelegate {
             present(alert, animated: true, completion: nil)
             return false
         }
+
+        if let viewController = self.opalImagePickerController {
+            return delegate?.imagePicker?(viewController, shouldSelectImage: image) ?? true
+        }
+
         return true
     }
 }
@@ -481,7 +501,10 @@ extension OpalImagePickerRootViewController: UICollectionViewDataSource {
         }
         
         guard let layoutAttributes = collectionView.collectionViewLayout.layoutAttributesForItem(at: indexPath),
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ImagePickerCollectionViewCell.reuseId, for: indexPath) as? ImagePickerCollectionViewCell else { return UICollectionViewCell() }
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ImagePickerCollectionViewCell.reuseId, for: indexPath) as? ImagePickerCollectionViewCell else {
+            return UICollectionViewCell()
+        }
+
         let photoAsset = photoAssets.object(at: indexPath.item)
         cell.indexPath = indexPath
         cell.photoAsset = photoAsset
@@ -490,9 +513,11 @@ extension OpalImagePickerRootViewController: UICollectionViewDataSource {
         if let selectionTintColor = self.selectionTintColor {
             cell.selectionTintColor = selectionTintColor
         }
+
         if let selectionImageTintColor = self.selectionImageTintColor {
             cell.selectionImageTintColor = selectionImageTintColor
         }
+
         if let selectionImage = self.selectionImage {
             cell.selectionImage = selectionImage
         }

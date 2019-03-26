@@ -20,6 +20,8 @@ import Photos
     ///   - picker: the `OpalImagePickerController`
     ///   - images: the array of `UIImage`
     @objc optional func imagePicker(_ picker: OpalImagePickerController, didFinishPickingImages images: [UIImage])
+
+    @objc optional func imagePicker(_ picker: OpalImagePickerController, shouldSelectImage: UIImage) -> Bool
     
     /// Image Picker did finish picking images. Provides an array of `PHAsset` selected.
     ///
