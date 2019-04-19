@@ -63,7 +63,7 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
     
     open var selectionImage: UIImage? {
         didSet {
-            overlayImageView?.image = selectionImage?.withRenderingMode(.alwaysTemplate)
+            overlayImageView?.image = selectionImage
         }
     }
     
