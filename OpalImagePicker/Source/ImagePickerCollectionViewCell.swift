@@ -94,8 +94,7 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
     lazy var timeOverlay: UIImageView = {
         let timeOverlay = UIImageView()
         timeOverlay.translatesAutoresizingMaskIntoConstraints = false
-        let bundle = Bundle.podBundle(forClass: type(of: self).self)
-        let timeOverlayImage = UIImage(named: "gradient", in: bundle, compatibleWith: nil)
+        let timeOverlayImage = UIImage(named: "gradient", in: Bundle.resourceBundle, compatibleWith: nil)
         timeOverlay.image = timeOverlayImage?.resizableImage(withCapInsets: .zero, resizingMode: .stretch)
         timeOverlay.isHidden = true
         return timeOverlay
@@ -259,7 +258,7 @@ class ImagePickerCollectionViewCell: UICollectionViewCell {
         let overlayImageView = UIImageView(frame: frame)
         overlayImageView.translatesAutoresizingMaskIntoConstraints = false
         overlayImageView.contentMode = .scaleAspectFit
-        overlayImageView.image = selectionImage ?? UIImage(named: "checkmark", in: Bundle.podBundle(forClass: type(of: self).self), compatibleWith: nil)?.withRenderingMode(.alwaysTemplate)
+        overlayImageView.image = selectionImage ?? UIImage(named: "checkmark", in: Bundle.resourceBundle, compatibleWith: nil)?.withRenderingMode(.alwaysTemplate)
         overlayImageView.tintColor = selectionImageTintColor
         overlayImageView.alpha = 0
         contentView.addSubview(overlayImageView)
